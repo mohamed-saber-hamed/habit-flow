@@ -39,11 +39,13 @@ import {
 import { createBrowserClient } from "@supabase/ssr";
 import { useCallback, useEffect, useState, useSyncExternalStore, type FormEvent, type ReactNode } from "react";
 import { currentStreak, dateKey, longestStreak, shiftDateKey, weekKeys, weekdayForKey } from "@/lib/metrics.mjs";
-import { makeDemoData } from "@/lib/demo-data";
 import type { AppData, AppView, Habit, HabitStatus, Task } from "@/lib/types";
 import { HabitModal, TaskModal } from "@/components/modals";
 
 const STORAGE_KEY = "habit-flow:data:v1";
+const LEGACY_SAMPLE_HABIT_IDS = new Set(["demo-water", "demo-move", "demo-read", "demo-mind", "demo-sleep", "demo-skill", "demo-journal"]);
+const LEGACY_SAMPLE_TASK_IDS = new Set(["task-plan", "task-book", "task-review"]);
+const EMPTY_DATA: AppData = { habits: [], tasks: [] };
 const THEME_KEY = "habit-flow:theme";
 const DAYS = ["S", "M", "T", "W", "T", "F", "S"];
 const NAV_ITEMS: { id: AppView; label: string; icon: LucideIcon }[] = [
@@ -93,7 +95,12 @@ function safeParseData(value: string | null): AppData | null {
   if (!value) return null;
   try {
     const parsed = JSON.parse(value) as AppData;
-    if (Array.isArray(parsed.habits) && Array.isArray(parsed.tasks)) return parsed;
+    if (Array.isArray(parsed.habits) && Array.isArray(parsed.tasks)) {
+      return {
+        habits: parsed.habits.filter((habit) => !LEGACY_SAMPLE_HABIT_IDS.has(habit.id)),
+        tasks: parsed.tasks.filter((task) => !LEGACY_SAMPLE_TASK_IDS.has(task.id)),
+      };
+    }
   } catch {
     return null;
   }
@@ -158,7 +165,7 @@ export default function HabitFlowApp() {
 
     if (!BACKEND_READY) {
       const local = safeParseData(localStorage.getItem(STORAGE_KEY));
-      setData(local ?? makeDemoData());
+      setData(local ?? EMPTY_DATA);
       setToday(dateKey());
       setReady(true);
       return () => { disposed = true; };
@@ -402,7 +409,7 @@ export default function HabitFlowApp() {
           <button className="prompt-link" onClick={() => setViewSafely("reports")}>See your growth <ArrowRight size={14} /></button>
         </div>
         <button className={`nav-link side-settings ${view === "settings" ? "is-active" : ""}`} onClick={() => setViewSafely("settings")}><Settings2 size={18} /><span>Settings</span></button>
-        <div className="profile-mini"><div className="avatar">{initials(userEmail)}</div><div className="profile-copy"><strong>{userEmail ? userEmail.split("@")[0] : "Your little corner"}</strong><span>{BACKEND_READY ? "Personal space" : "Demo workspace"}</span></div><button className="icon-button profile-more" aria-label="Account options" onClick={() => BACKEND_READY ? void signOut() : showToast("Demo data stays in this browser only.")}><MoreHorizontal size={19} /></button></div>
+        <div className="profile-mini"><div className="avatar">{initials(userEmail)}</div><div className="profile-copy"><strong>{userEmail ? userEmail.split("@")[0] : "Your little corner"}</strong><span>{BACKEND_READY ? "Personal space" : "Browser workspace"}</span></div><button className="icon-button profile-more" aria-label="Account options" onClick={() => BACKEND_READY ? void signOut() : showToast("Your data stays in this browser only.")}><MoreHorizontal size={19} /></button></div>
       </aside>
 
       <main className="main-area">
@@ -422,7 +429,7 @@ export default function HabitFlowApp() {
           {view === "habits" && <HabitsView data={data} today={today} searchText={searchText} onSearch={setSearchText} statusFilter={habitStatusFilter} onStatusFilter={setHabitStatusFilter} onAdd={() => setHabitModal({ open: true })} onEdit={(habit) => setHabitModal({ open: true, habit })} onToggle={toggleCompletion} onUpdate={updateHabit} onDelete={deleteHabit} />}
           {view === "reports" && <ReportsView data={data} today={today} onExport={exportCsv} onPrint={() => window.print()} />}
           {view === "tasks" && <TasksView tasks={data.tasks} today={today} onToggle={toggleTask} onDelete={deleteTask} onAdd={() => setTaskModalOpen(true)} />}
-          {view === "settings" && <SettingsView theme={theme} onThemeChange={setTheme} notificationsEnabled={notificationsEnabled} onNotifications={requestNotifications} onExport={exportCsv} onSignOut={BACKEND_READY ? signOut : undefined} onReset={() => { if (window.confirm("Restore the sample data for this browser?")) { localStorage.removeItem(STORAGE_KEY); setData(makeDemoData()); showToast("Sample workspace restored."); } }} />}
+          {view === "settings" && <SettingsView theme={theme} onThemeChange={setTheme} notificationsEnabled={notificationsEnabled} onNotifications={requestNotifications} onExport={exportCsv} onSignOut={BACKEND_READY ? signOut : undefined} onReset={() => { if (window.confirm("Clear all habits and tasks saved in this browser? This cannot be undone.")) { localStorage.removeItem(STORAGE_KEY); setData(EMPTY_DATA); showToast("Local workspace cleared."); } }} />}
         </section>
 
         <button className="quick-add" onClick={() => setHabitModal({ open: true })}><Plus size={19} strokeWidth={2.2} /><span>Quick add</span></button>
@@ -462,7 +469,7 @@ function DashboardView(props: DashboardProps) {
   return (
     <>
       <div className="welcome-row"><div><p className="eyebrow">{todayLabel} <span className="eyebrow-dot">·</span> TAKE A MOMENT FOR YOU</p><h1>{greeting}, <em>friend.</em></h1><p className="welcome-subtitle">A little progress, made gently. You’ve got this.</p></div><button className="button button-outline welcome-add" onClick={props.onAddHabit}><Plus size={17} /> New habit</button></div>
-      {!BACKEND_READY && <div className="preview-banner"><Sparkles size={16} /><span>This is a working preview. Your sample data saves in this browser. Connect Supabase to turn on private accounts and cloud sync.</span><button className="text-button" onClick={() => props.onNavigate("settings")}>About preview</button></div>}
+      {!BACKEND_READY && <div className="preview-banner"><Sparkles size={16} /><span>This is a working preview. Habits and tasks you add save in this browser only. Connect Supabase to turn on private accounts and cloud sync.</span><button className="text-button" onClick={() => props.onNavigate("settings")}>About preview</button></div>}
       <div className="metrics-grid">
         <MetricCard label="TODAY’S RHYTHM" value={`${doneToday}/${plannedToday}`} note={plannedToday ? `${completionPercent}% of today’s plan` : "No habits planned today"} icon={Target} tone="green" progress={completionPercent} />
         <MetricCard label="CURRENT STREAK" value={`${strongestCurrentStreak}`} suffix="days" note={strongestCurrentStreak ? "Your consistency is adding up" : "Your next step starts today"} icon={Flame} tone="peach" />
@@ -599,9 +606,9 @@ function SettingsView({ theme, onThemeChange, notificationsEnabled, onNotificati
       <section className="panel settings-section"><div className="settings-section-head"><div><p className="section-eyebrow">HOW IT FEELS</p><h2>Appearance</h2><p>Choose the light that feels right today.</p></div><Sun className="muted-icon" size={20} /></div><div className="theme-options"><button className={`theme-option ${theme === "light" ? "theme-selected" : ""}`} onClick={() => onThemeChange("light")}><span className="theme-preview theme-preview-light"><span /><span /><span /></span><strong>Soft light</strong><span className="theme-radio" /></button><button className={`theme-option ${theme === "dark" ? "theme-selected" : ""}`} onClick={() => onThemeChange("dark")}><span className="theme-preview theme-preview-dark"><span /><span /><span /></span><strong>Evening dark</strong><span className="theme-radio" /></button></div></section>
       <section className="panel settings-section"><div className="settings-section-head"><div><p className="section-eyebrow">A GENTLE NUDGE</p><h2>Reminders</h2><p>Browser reminders can nudge you at the times you choose.</p></div><Bell className="muted-icon" size={20} /></div><div className="setting-row"><div className="setting-symbol"><Clock3 size={17} /></div><div className="setting-copy"><strong>Habit reminders</strong><span>Works while Habit Flow is open in this browser.</span></div><button className={`switch ${notificationsEnabled ? "switch-on" : ""}`} onClick={onNotifications} role="switch" aria-checked={notificationsEnabled} aria-label="Enable habit reminders"><span /></button></div><div className="setting-hint">Your browser will ask for permission the first time you turn this on.</div></section>
       <section className="panel settings-section"><div className="settings-section-head"><div><p className="section-eyebrow">YOUR INFORMATION</p><h2>Keep a copy</h2><p>Take your check-ins and to-dos with you any time.</p></div><Download className="muted-icon" size={20} /></div><div className="setting-row"><div className="setting-symbol"><FileText size={17} /></div><div className="setting-copy"><strong>Export your data</strong><span>Download habits, check-ins, and tasks as a CSV file.</span></div><button className="button button-outline button-small" onClick={onExport}>Export CSV</button></div></section>
-      {!BACKEND_READY && <section className="panel setup-note"><div className="setup-note-icon"><LockIcon /></div><div><p className="section-eyebrow">PREVIEW WORKSPACE</p><h2>Private accounts are ready to connect.</h2><p>This preview stores sample data in your browser. Connect a Supabase project to enable secure sign-in and cloud sync for your own account.</p><code>NEXT_PUBLIC_SUPABASE_URL · NEXT_PUBLIC_SUPABASE_ANON_KEY</code></div></section>}
+      {!BACKEND_READY && <section className="panel setup-note"><div className="setup-note-icon"><LockIcon /></div><div><p className="section-eyebrow">PREVIEW WORKSPACE</p><h2>Private accounts are ready to connect.</h2><p>This preview stores the habits and tasks you add in your browser. Connect a Supabase project to enable secure sign-in and cloud sync for your own account.</p><code>NEXT_PUBLIC_SUPABASE_URL · NEXT_PUBLIC_SUPABASE_ANON_KEY</code></div></section>}
       {onSignOut && <section className="panel settings-section"><div className="setting-row"><div className="setting-symbol"><LogOut size={17} /></div><div className="setting-copy"><strong>Sign out</strong><span>End this session on this device.</span></div><button className="button button-outline button-small" onClick={onSignOut}>Sign out</button></div></section>}
-    </div><aside className="settings-side"><div className="settings-side-card"><div className="side-card-icon"><Sparkles size={18} /></div><p className="section-eyebrow">A SMALL THOUGHT</p><h2>Let your routine fit your life—not the other way around.</h2><p>Change your habit days or reminder times whenever your week changes.</p></div><button className="reset-button" onClick={onReset}><Archive size={15} /> Restore sample workspace</button></aside></div>
+    </div><aside className="settings-side"><div className="settings-side-card"><div className="side-card-icon"><Sparkles size={18} /></div><p className="section-eyebrow">A SMALL THOUGHT</p><h2>Let your routine fit your life—not the other way around.</h2><p>Change your habit days or reminder times whenever your week changes.</p></div><button className="reset-button" onClick={onReset}><Archive size={15} /> Clear local workspace</button></aside></div>
   </>;
 }
 

@@ -24,7 +24,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`. Without Supabase environment variables, Habit Flow runs in a browser-local preview with sample data saved in that browser. Preview data is not account-protected and does not sync between devices.
+Open `http://localhost:3000`. Without Supabase environment variables, Habit Flow runs in a browser-local preview that starts with an empty workspace. Habits and tasks you add are saved in that browser only; they are not account-protected and do not sync between devices.
 
 ## Enable accounts and cloud sync
 

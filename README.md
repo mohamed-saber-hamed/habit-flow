@@ -2,6 +2,10 @@
 
 A responsive personal habit and task tracker focused on gentle routines, visible progress, and private user data.
 
+## Live deployment
+
+[Open Habit Flow](https://habit-flow-mohamed-7522.vercel.app)
+
 ## Included
 
 - Email/password sign-up, sign-in, and email-confirmation callback (when Supabase is configured).
